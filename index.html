@@ -237,6 +237,16 @@
         <div class="progress-fill" id="progress-fill"></div>
       </div>
 
+      <!-- Mode Toggle -->
+      <div class="mode-panel">
+        <button class="mode-btn active" id="mode-btn-listen" onclick="setMode('listen')">
+          🎧 リスニング
+        </button>
+        <button class="mode-btn" id="mode-btn-silent" onclick="setMode('silent')">
+          🔇 シャドーイング
+        </button>
+      </div>
+
       <!-- Speed Controls -->
       <div class="speed-panel">
         <span class="speed-label">速度</span>
@@ -275,6 +285,41 @@
 
     </div><!-- /player-panel -->
   </div><!-- /screen-player -->
+
+
+  <!-- ===================================================
+       MODAL: 発音チェック
+  =================================================== -->
+  <div id="modal-pron" class="modal-overlay" style="display:none;" onclick="handleModalBgClick(event)">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-icon">🎤</div>
+      <h3 class="modal-title">発音チェック</h3>
+      <p class="modal-sub">以下のフレーズを声に出して読んでください</p>
+
+      <div class="pron-phrase" id="pron-phrase"></div>
+
+      <div class="pron-status" id="pron-status">🎤 ボタンを押して録音スタート</div>
+
+      <button class="btn-record" id="btn-record" onclick="toggleRecording()">
+        <span id="record-icon">🎤</span>
+        <span id="record-label">録音する</span>
+      </button>
+
+      <div class="score-display" id="score-display" style="display:none;">
+        <div class="score-circle" id="score-circle">
+          <span class="score-num" id="score-num">0</span>
+          <span class="score-unit">点</span>
+        </div>
+        <div class="score-label" id="score-label"></div>
+        <div class="score-transcript" id="score-transcript"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-outline btn-sm" onclick="skipPronCheck()">スキップ</button>
+        <button class="btn-primary btn-sm" id="btn-pron-next" onclick="proceedAfterPron()" style="display:none;">次へ →</button>
+      </div>
+    </div>
+  </div>
 
 
   <!-- ===================================================

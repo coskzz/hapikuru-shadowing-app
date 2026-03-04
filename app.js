@@ -12,6 +12,7 @@ const APP = {
 const PLAYER = {
   isPlaying: false,
   speed: 0.75,
+  mode: 'listen',     // 'listen' | 'silent'
   currentWordIndex: -1,
   words: [],          // [{ word, start, end }]
   utterance: null,
@@ -19,6 +20,14 @@ const PLAYER = {
   boundaryFired: false,
   playCount: 0,
   textHidden: false,
+};
+
+// 発音チェック state
+const PRON = {
+  recognition: null,
+  isRecording: false,
+  targetPhrase: '',
+  lastScore: null,
 };
 
 // =====================================================
@@ -321,9 +330,39 @@ function openLesson(lessonId) {
   $('text-toggle-btn').classList.remove('active');
   $('karaoke-text').classList.remove('text-hidden');
 
-  $('player-tip').textContent = 'テキストを目で追いながら音声を聞きましょう';
+  // Sync mode buttons
+  applyMode(PLAYER.mode);
 
   showScreen('screen-player');
+}
+
+// ---- Mode (listen / silent) ----
+function setMode(mode) {
+  PLAYER.mode = mode;
+  if (PLAYER.isPlaying) {
+    // Restart with new mode
+    const idx = Math.max(0, PLAYER.currentWordIndex - 1);
+    stopAllAudio();
+    PLAYER.currentWordIndex = idx;
+    PLAYER.isPlaying = false;
+    setTimeout(() => playPlayer(), 80);
+  }
+  applyMode(mode);
+}
+
+function applyMode(mode) {
+  $('mode-btn-listen').classList.toggle('active', mode === 'listen');
+  $('mode-btn-silent').classList.toggle('active', mode === 'silent');
+
+  const tipEl   = $('player-tip');
+  const hintEl  = $('karaoke-hint');
+  if (mode === 'silent') {
+    tipEl.textContent = '🔇 音声なし：テキストに合わせて声に出して読みましょう';
+    hintEl.querySelector('span:last-child').textContent = '下のボタンで練習スタート';
+  } else {
+    tipEl.textContent = 'テキストを目で追いながら音声を聞きましょう';
+    hintEl.querySelector('span:last-child').textContent = '下のボタンで再生スタート';
+  }
 }
 
 // ---- Karaoke Text Setup ----
@@ -428,10 +467,6 @@ function stopAllAudio() {
 }
 
 function togglePlay() {
-  if (!window.speechSynthesis) {
-    alert('このブラウザは音声機能（Web Speech API）に対応していません。\nChromeまたはSafariでお試しください。');
-    return;
-  }
   if (PLAYER.isPlaying) {
     pausePlayer();
   } else {
@@ -445,13 +480,29 @@ function playPlayer() {
   // Hide the hint message
   $('karaoke-hint').classList.add('hidden');
 
+  // ── サイレントモード: タイマーのみ ──
+  if (PLAYER.mode === 'silent') {
+    if (PLAYER.isPlaying) return;
+    PLAYER.isPlaying = true;
+    setPlayIcon(true);
+    setStatusDot(true);
+    const startIdx = Math.max(0, PLAYER.currentWordIndex < 0 ? 0 : PLAYER.currentWordIndex);
+    startFallbackTimer(startIdx);
+    return;
+  }
+
+  // ── リスニングモード: Web Speech API ──
+  if (!window.speechSynthesis) {
+    alert('このブラウザは音声機能（Web Speech API）に対応していません。\nChromeまたはSafariでお試しください。');
+    return;
+  }
+
   // If paused mid-utterance, resume
   if (window.speechSynthesis.paused && PLAYER.utterance) {
     window.speechSynthesis.resume();
     PLAYER.isPlaying = true;
     setPlayIcon(true);
     setStatusDot(true);
-    // Restart fallback from current position
     startFallbackTimer(PLAYER.currentWordIndex + 1);
     return;
   }
@@ -532,7 +583,9 @@ function playPlayer() {
 }
 
 function pausePlayer() {
-  window.speechSynthesis.pause();
+  if (PLAYER.mode === 'listen' && window.speechSynthesis) {
+    window.speechSynthesis.pause();
+  }
   clearFallbackTimer();
   PLAYER.isPlaying = false;
   setPlayIcon(false);
@@ -599,15 +652,164 @@ function onPlayerEnd() {
   saveProgress();
 
   $('player-play-count').textContent = `再生回数: ${PLAYER.playCount}回`;
-  $('player-tip').textContent = '🎉 完了！「もう一度」または「←」で戻れます';
+  $('player-tip').textContent = '🎉 完了！';
 
-  setTimeout(() => showComplete(), 700);
+  // リスニングモード完了後に発音チェックを案内
+  if (PLAYER.mode === 'listen') {
+    setTimeout(() => openPronCheck(), 800);
+  } else {
+    // サイレントモードはそのまま完了画面へ
+    setTimeout(() => showComplete(), 700);
+  }
 }
 
 function goBackFromPlayer() {
   stopAllAudio();
   PLAYER.isPlaying = false;
   showHome();
+}
+
+// =====================================================
+// 発音チェック (Pronunciation Check)
+// =====================================================
+
+// レッスンテキストから最初の1文を抽出
+function extractFirstSentence(text) {
+  const m = text.match(/[^.!?]+[.!?]/);
+  return m ? m[0].trim() : text.split(' ').slice(0, 12).join(' ');
+}
+
+function openPronCheck() {
+  const lesson = APP.currentLesson;
+  if (!lesson) { showComplete(); return; }
+
+  PRON.targetPhrase = extractFirstSentence(lesson.text);
+  PRON.lastScore    = null;
+  PRON.isRecording  = false;
+
+  $('pron-phrase').textContent   = PRON.targetPhrase;
+  $('pron-status').textContent   = '🎤 ボタンを押して録音スタート';
+  $('score-display').style.display = 'none';
+  $('btn-pron-next').style.display = 'none';
+  $('btn-record').classList.remove('recording');
+  $('record-icon').textContent  = '🎤';
+  $('record-label').textContent = '録音する';
+
+  $('modal-pron').style.display = 'flex';
+}
+
+function closePronModal() {
+  $('modal-pron').style.display = 'none';
+  stopRecording();
+}
+
+function handleModalBgClick(e) {
+  if (e.target === $('modal-pron')) closePronModal();
+}
+
+function toggleRecording() {
+  if (PRON.isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+}
+
+function startRecording() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    $('pron-status').textContent = '⚠️ お使いのブラウザは音声認識に対応していません（Chrome推奨）';
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang             = 'en-US';
+  recognition.interimResults   = false;
+  recognition.maxAlternatives  = 1;
+  PRON.recognition             = recognition;
+  PRON.isRecording             = true;
+
+  $('btn-record').classList.add('recording');
+  $('record-icon').textContent  = '⏹';
+  $('record-label').textContent = '録音中...';
+  $('pron-status').textContent  = '🔴 録音中 — 読み終わったら自動で判定します';
+  $('score-display').style.display  = 'none';
+  $('btn-pron-next').style.display  = 'none';
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    const score = calcSimilarity(PRON.targetPhrase, transcript);
+    PRON.lastScore = score;
+    showPronScore(score, transcript);
+  };
+
+  recognition.onerror = (e) => {
+    $('pron-status').textContent = `⚠️ エラー: ${e.error}`;
+    resetRecordBtn();
+    PRON.isRecording = false;
+  };
+
+  recognition.onend = () => {
+    resetRecordBtn();
+    PRON.isRecording = false;
+  };
+
+  recognition.start();
+}
+
+function stopRecording() {
+  if (PRON.recognition) {
+    try { PRON.recognition.stop(); } catch {}
+    PRON.recognition = null;
+  }
+  PRON.isRecording = false;
+  resetRecordBtn();
+}
+
+function resetRecordBtn() {
+  $('btn-record').classList.remove('recording');
+  $('record-icon').textContent  = '🎤';
+  $('record-label').textContent = '録音する';
+}
+
+// 単語一致率でスコア計算（0〜100）
+function calcSimilarity(target, spoken) {
+  const clean = s => s.toLowerCase().replace(/[^a-z\s]/g, '').trim().split(/\s+/).filter(Boolean);
+  const tw = clean(target);
+  const sw = clean(spoken);
+  if (tw.length === 0) return 0;
+  const matched = tw.filter(w => sw.includes(w)).length;
+  return Math.round((matched / tw.length) * 100);
+}
+
+function showPronScore(score, transcript) {
+  const isClear  = score >= 70;
+  const circle   = $('score-circle');
+  const numEl    = $('score-num');
+  const labelEl  = $('score-label');
+  const transEl  = $('score-transcript');
+  const nextBtn  = $('btn-pron-next');
+
+  numEl.textContent   = score;
+  circle.className    = `score-circle${isClear ? ' clear' : ''}`;
+  labelEl.textContent = isClear ? '🎉 クリア！ Great job!' : '😊 もう少し！ Try again!';
+  transEl.textContent = `認識結果: "${transcript}"`;
+
+  $('score-display').style.display = 'flex';
+  nextBtn.style.display            = 'inline-flex';
+  $('pron-status').textContent     = isClear
+    ? '✅ 70点以上でクリアです！'
+    : '再チャレンジするか「次へ」で進めます';
+}
+
+function skipPronCheck() {
+  closePronModal();
+  showComplete();
+}
+
+function proceedAfterPron() {
+  closePronModal();
+  showComplete();
 }
 
 // =====================================================
