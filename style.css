@@ -669,6 +669,37 @@ html, body {
 .profile-role-badge.student { background: var(--pink-bg); color: var(--pink); }
 .profile-role-badge.admin   { background: #fff3e0; color: #e65100; }
 
+.profile-pw-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.profile-pw {
+  font-size: 0.9rem;
+  color: var(--text-sub);
+  font-family: monospace;
+  letter-spacing: 0.08em;
+}
+
+.btn-pw-toggle {
+  height: 26px;
+  padding: 0 10px;
+  background: var(--pink-bg);
+  color: var(--pink);
+  border: 1px solid var(--pink-light);
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-pw-toggle:active { background: var(--pink-light); }
+
 .about-list {
   display: flex;
   flex-direction: column;

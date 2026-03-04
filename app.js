@@ -233,6 +233,21 @@ function renderProfile() {
   const badge                       = $('profile-role-badge');
   badge.textContent                 = APP.user.role === 'admin' ? '👩‍🏫 講師' : '🎓 生徒';
   badge.className                   = `profile-role-badge ${APP.user.role}`;
+  // Reset password display on each render
+  $('profile-pw').textContent       = '●●●●●●';
+  $('btn-pw-toggle').textContent    = '表示';
+}
+
+function toggleProfilePassword() {
+  const pwEl  = $('profile-pw');
+  const btnEl = $('btn-pw-toggle');
+  if (btnEl.textContent === '表示') {
+    pwEl.textContent  = APP.user.password;
+    btnEl.textContent = '隠す';
+  } else {
+    pwEl.textContent  = '●●●●●●';
+    btnEl.textContent = '表示';
+  }
 }
 
 // ---- Admin Tab ----
