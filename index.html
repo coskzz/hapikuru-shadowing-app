@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>ハピクル リスニング</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===================================================
+       SCREEN: ログイン / サインアップ
+  =================================================== -->
+  <div id="screen-welcome" class="screen screen-welcome">
+    <div class="welcome-top">
+      <div class="welcome-logo">🎧</div>
+      <h1 class="welcome-app-name">ハピクル リスニング</h1>
+      <p class="welcome-subtitle">英語リスニング・シャドーイング練習</p>
+    </div>
+
+    <!-- Login Form -->
+    <div id="form-login" class="auth-card">
+      <h2 class="auth-title">ログイン</h2>
+      <div class="form-group">
+        <label class="form-label">生徒ID</label>
+        <input id="login-id" class="form-input" type="text" placeholder="例: tanaka" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input id="login-pw" class="form-input" type="password" placeholder="パスワード" autocomplete="current-password" />
+      </div>
+      <div id="login-error" class="error-msg" style="display:none;"></div>
+      <button class="btn-primary" onclick="login()">ログイン</button>
+      <button class="btn-link" onclick="showSignupForm()">新規登録はこちら →</button>
+      <p class="demo-hint">デモ: ID「tanaka」パスワード「1234」<br>講師: ID「teacher」パスワード「hapikuru2026」</p>
+    </div>
+
+    <!-- Signup Form -->
+    <div id="form-signup" class="auth-card" style="display:none;">
+      <h2 class="auth-title">新規登録</h2>
+      <div class="form-group">
+        <label class="form-label">お名前</label>
+        <input id="signup-name" class="form-input" type="text" placeholder="例: 田中 太郎" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">生徒ID（英字・数字）</label>
+        <input id="signup-id" class="form-input" type="text" placeholder="例: tanaka2026" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">パスワード</label>
+        <input id="signup-pw" class="form-input" type="password" placeholder="パスワード" autocomplete="new-password" />
+      </div>
+      <div id="signup-error" class="error-msg" style="display:none;"></div>
+      <button class="btn-primary" onclick="signup()">登録する</button>
+      <button class="btn-link" onclick="showLoginForm()">← ログインに戻る</button>
+    </div>
+  </div>
+
+
+  <!-- ===================================================
+       SCREEN: ホーム
+  =================================================== -->
+  <div id="screen-home" class="screen screen-home" style="display:none;">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <span class="header-icon">🎧</span>
+        <span class="header-title">ハピクル リスニング</span>
+      </div>
+      <div class="header-right">
+        <span id="header-user-name" class="header-user"></span>
+        <button class="btn-logout" onclick="logout()">ログアウト</button>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav class="tab-nav">
+      <button class="tab-btn active" data-tab="lessons" onclick="showTab('lessons')">レッスン</button>
+      <button class="tab-btn" data-tab="progress" onclick="showTab('progress')">進捗</button>
+      <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">プロフィール</button>
+      <button id="tab-btn-admin" class="tab-btn" data-tab="admin" onclick="showTab('admin')" style="display:none;">管理</button>
+    </nav>
+
+    <!-- Tab Content -->
+    <div class="tab-body">
+
+      <!-- Lessons Tab -->
+      <div id="tab-lessons" class="tab-content">
+        <div class="tab-section-title">
+          <h2>レッスン一覧</h2>
+          <p class="tab-section-sub">レッスンを選んでリスニング練習を始めよう</p>
+        </div>
+        <div id="lessons-grid" class="lessons-grid"></div>
+      </div>
+
+      <!-- Progress Tab -->
+      <div id="tab-progress" class="tab-content" style="display:none;">
+        <div class="tab-section-title">
+          <h2>学習の進捗</h2>
+        </div>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="stat-completed">0 / 0</div>
+            <div class="stat-label">完了レッスン</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon">▶</div>
+            <div class="stat-value" id="stat-plays">0 回</div>
+            <div class="stat-label">総再生回数</div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3 class="section-card-title">練習したレッスン</h3>
+          <div id="recent-lessons" class="recent-list">
+            <p class="no-data">まだ練習したレッスンはありません</p>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3 class="section-card-title">レッスン別進捗</h3>
+          <div id="lesson-progress-list" class="lesson-progress-list"></div>
+        </div>
+      </div>
+
+      <!-- Profile Tab -->
+      <div id="tab-profile" class="tab-content" style="display:none;">
+        <div class="tab-section-title">
+          <h2>プロフィール</h2>
+        </div>
+        <div class="profile-card">
+          <div class="profile-avatar">👤</div>
+          <div class="profile-name" id="profile-name"></div>
+          <div class="profile-id-row">
+            <span class="profile-id-label">ID</span>
+            <span class="profile-id" id="profile-id"></span>
+          </div>
+          <div class="profile-role-badge" id="profile-role-badge"></div>
+        </div>
+
+        <div class="section-card">
+          <h3 class="section-card-title">アプリについて</h3>
+          <div class="about-list">
+            <div class="about-row">
+              <span class="about-label">バージョン</span>
+              <span class="about-val">1.0.0 (Mock)</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">対応学年</span>
+              <span class="about-val">中3・高校生</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">音声エンジン</span>
+              <span class="about-val">Web Speech API</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Admin Tab -->
+      <div id="tab-admin" class="tab-content" style="display:none;">
+        <div class="tab-section-title">
+          <h2>生徒管理</h2>
+          <p class="tab-section-sub">生徒の学習状況を確認できます</p>
+        </div>
+
+        <div class="admin-summary">
+          <div class="admin-summary-card">
+            <div class="admin-summary-num" id="admin-total-students">0</div>
+            <div class="admin-summary-label">生徒数</div>
+          </div>
+          <div class="admin-summary-card">
+            <div class="admin-summary-num" id="admin-active-students">0</div>
+            <div class="admin-summary-label">練習済み</div>
+          </div>
+        </div>
+
+        <div class="section-card">
+          <h3 class="section-card-title">生徒一覧</h3>
+          <div id="admin-student-list" class="admin-student-list"></div>
+        </div>
+      </div>
+
+    </div><!-- /tab-body -->
+  </div><!-- /screen-home -->
+
+
+  <!-- ===================================================
+       SCREEN: プレイヤー（カラオケ式リスニング）
+  =================================================== -->
+  <div id="screen-player" class="screen screen-player" style="display:none;">
+
+    <!-- Player Header -->
+    <header class="player-header">
+      <button class="btn-back" onclick="goBackFromPlayer()">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M13 4L7 10L13 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="player-header-info">
+        <div class="player-title" id="player-title"></div>
+        <div class="player-meta">
+          <span class="level-badge-sm" id="player-level"></span>
+          <span class="player-category" id="player-category"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Karaoke Area -->
+    <div class="karaoke-wrapper">
+      <div class="karaoke-hint" id="karaoke-hint">
+        <span class="karaoke-hint-icon">▶</span>
+        <span>下のボタンで再生スタート</span>
+      </div>
+      <div class="karaoke-text" id="karaoke-text"></div>
+    </div>
+
+    <!-- Player Controls Panel -->
+    <div class="player-panel">
+
+      <!-- Play Count & Status -->
+      <div class="player-status">
+        <span class="play-count-label" id="player-play-count">再生回数: 0回</span>
+        <span class="player-status-dot" id="player-status-indicator"></span>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+
+      <!-- Speed Controls -->
+      <div class="speed-panel">
+        <span class="speed-label">速度</span>
+        <div class="speed-buttons">
+          <button class="speed-btn" data-speed="0.5"  onclick="setSpeed(0.5)">0.5×</button>
+          <button class="speed-btn active" data-speed="0.75" onclick="setSpeed(0.75)">0.75×</button>
+          <button class="speed-btn" data-speed="1.0"  onclick="setSpeed(1.0)">1.0×</button>
+          <button class="speed-btn" data-speed="1.25" onclick="setSpeed(1.25)">1.25×</button>
+        </div>
+      </div>
+
+      <!-- Main Controls -->
+      <div class="control-row">
+        <button class="btn-ctrl btn-replay" onclick="replayPlayer()" title="最初から">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M3 12C3 7.03 7.03 3 12 3C14.39 3 16.56 3.93 18.18 5.46L20 3.64V9H14.36L16.55 6.81C15.35 5.68 13.76 5 12 5C8.13 5 5 8.13 5 12H3Z" fill="currentColor"/>
+            <path d="M12 19C15.87 19 19 15.87 19 12H21C21 16.97 16.97 21 12 21C9.61 21 7.44 20.07 5.82 18.54L4 20.36V15H9.64L7.45 17.19C8.65 18.32 10.24 19 12 19Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="btn-ctrl btn-play-main" id="play-btn" onclick="togglePlay()">
+          <svg id="icon-play" width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+          </svg>
+          <svg id="icon-pause" width="28" height="28" viewBox="0 0 24 24" fill="none" style="display:none;">
+            <path d="M6 19H10V5H6V19ZM14 5V19H18V5H14Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="btn-ctrl btn-text-toggle" id="text-toggle-btn" onclick="toggleTextVisibility()" title="テキスト表示切替">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+            <path d="M12 4.5C7 4.5 2.73 7.61 1 12C2.73 16.39 7 19.5 12 19.5C17 19.5 21.27 16.39 23 12C21.27 7.61 17 4.5 12 4.5ZM12 17C9.24 17 7 14.76 7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12C17 14.76 14.76 17 12 17ZM12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9Z" fill="currentColor"/>
+          </svg>
+        </button>
+      </div>
+
+      <p class="player-tip" id="player-tip">テキストを目で追いながら音声を聞きましょう</p>
+
+    </div><!-- /player-panel -->
+  </div><!-- /screen-player -->
+
+
+  <!-- ===================================================
+       SCREEN: レッスン完了
+  =================================================== -->
+  <div id="screen-complete" class="screen screen-complete" style="display:none;">
+    <div class="complete-container">
+      <div class="complete-emoji">🎉</div>
+      <h2 class="complete-title">レッスン完了！</h2>
+      <div class="complete-lesson-name" id="complete-lesson-name"></div>
+      <div class="complete-stats">
+        <div class="complete-stat">
+          <span class="complete-stat-num" id="complete-play-count"></span>
+          <span class="complete-stat-label">回目の練習</span>
+        </div>
+      </div>
+      <p class="complete-message">よく頑張りました！<br>繰り返し練習するとリスニング力がアップします。</p>
+      <div class="complete-actions">
+        <button class="btn-primary" onclick="replayFromComplete()">もう一度練習する</button>
+        <button class="btn-outline" onclick="goHomeFromComplete()">レッスン一覧に戻る</button>
+      </div>
+    </div>
+  </div>
+
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
