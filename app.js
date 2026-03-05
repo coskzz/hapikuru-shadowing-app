@@ -12,7 +12,7 @@ const APP = {
 
 const PLAYER = {
   isPlaying: false,
-  speed: 0.75,
+  speed: 1.0,
   mode: 'listen',     // 'listen' | 'silent'
   currentWordIndex: -1,
   words: [],          // [{ word, start, end }]
