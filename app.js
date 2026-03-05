@@ -6,7 +6,8 @@
 const APP = {
   user: null,
   currentLesson: null,
-  progress: {},   // { lessonId: { playCount, completed, lastAt } }
+  progress: {},   // { lessonId: { playCount, completed, lastAt, bestScore, wordsRead } }
+  meta: { streak: 0, lastStudyDate: '', totalWordsRead: 0 },
 };
 
 const PLAYER = {
@@ -73,6 +74,7 @@ function login() {
   APP.user = user;
   sessionStorage.setItem('currentUser', JSON.stringify(user));
   loadProgress();
+  loadMeta();
   showHome();
 }
 
@@ -103,12 +105,14 @@ function signup() {
   APP.user = newUser;
   sessionStorage.setItem('currentUser', JSON.stringify(newUser));
   loadProgress();
+  loadMeta();
   showHome();
 }
 
 function logout() {
   APP.user = null;
   APP.progress = {};
+  APP.meta = { streak: 0, lastStudyDate: '', totalWordsRead: 0 };
   sessionStorage.removeItem('currentUser');
   stopAllAudio();
   $('login-id').value = '';
@@ -194,42 +198,41 @@ function renderProgress() {
   const completed  = available.filter(l => APP.progress[l.id]?.completed).length;
   const totalPlays = Object.values(APP.progress).reduce((s, p) => s + (p.playCount || 0), 0);
 
+  // ── 3大指標 ──
+  $('stat-streak').textContent  = APP.meta.streak || 0;
+  $('stat-words').textContent   = (APP.meta.totalWordsRead || 0).toLocaleString();
+
+  // 全体進捗（モック：完了 / 全数）
+  const overallPct = available.length > 0
+    ? Math.round((completed / available.length) * 100)
+    : 0;
+  $('stat-overall').textContent      = `${overallPct}%`;
+  $('stat-overall-note').textContent = '（サンプル2本のみ）';
+
+  // サブ指標
   $('stat-completed').textContent = `${completed} / ${available.length}`;
   $('stat-plays').textContent     = `${totalPlays} 回`;
 
-  // Recent list
-  const practiced = available.filter(l => APP.progress[l.id]?.playCount > 0);
-  const recentEl  = $('recent-lessons');
-  if (practiced.length === 0) {
-    recentEl.innerHTML = '<p class="no-data">まだ練習したレッスンはありません</p>';
-  } else {
-    recentEl.innerHTML = practiced.map(l => {
-      const p = APP.progress[l.id];
-      return `
-        <div class="recent-item" onclick="openLesson(${l.id})">
-          <span class="recent-emoji">${l.emoji}</span>
-          <div class="recent-info">
-            <span class="recent-title">${l.title}</span>
-            <span class="recent-count">再生 ${p.playCount}回${p.completed ? ' ✓' : ''}</span>
-          </div>
-          <span class="recent-arrow">▶</span>
-        </div>`;
-    }).join('');
-  }
-
-  // Lesson progress bars
-  const listEl = $('lesson-progress-list');
+  // ── レッスン別成績 ──
+  const listEl = $('lesson-scores-list');
   listEl.innerHTML = available.map(l => {
     const p = APP.progress[l.id] || { playCount: 0, completed: false };
-    const barW = p.completed ? 100 : Math.min(p.playCount * 25, 90);
+    const score = p.bestScore != null ? `${p.bestScore}点` : '未受験';
+    const scoreCls = p.bestScore == null ? 'score-none'
+                   : p.bestScore >= 70   ? 'score-clear'
+                   : 'score-try';
     return `
-      <div class="lesson-progress-item">
-        <div class="lesson-progress-label">
-          <span>${l.emoji} ${l.title}</span>
-          <span>${p.completed ? '完了' : p.playCount > 0 ? `${p.playCount}回` : '未練習'}</span>
+      <div class="lesson-score-row" onclick="openLesson(${l.id})">
+        <div class="lesson-score-left">
+          <span class="lesson-score-emoji">${l.emoji}</span>
+          <div class="lesson-score-info">
+            <div class="lesson-score-title">${l.title}</div>
+            <div class="lesson-score-meta">${l.level} · ${l.category}　再生 ${p.playCount}回</div>
+          </div>
         </div>
-        <div class="lesson-progress-bar">
-          <div class="lesson-progress-bar-fill" style="width:${barW}%"></div>
+        <div class="lesson-score-right">
+          <span class="lesson-score-badge ${scoreCls}">${score}</span>
+          ${p.completed ? '<span class="lesson-done-badge">✓</span>' : ''}
         </div>
       </div>`;
   }).join('');
@@ -264,29 +267,89 @@ function renderAdmin() {
   const students = MOCK_USERS.filter(u => u.role === 'student');
   $('admin-total-students').textContent = students.length;
 
-  // Count how many have practiced (their progress data in localStorage)
   let activeCount = 0;
+  const avail = LESSONS.filter(l => l.available).length;
+
   const rows = students.map(student => {
-    const raw     = localStorage.getItem(`progress_${student.id}`);
-    const prog    = raw ? JSON.parse(raw) : {};
-    const plays   = Object.values(prog).reduce((s, p) => s + (p.playCount || 0), 0);
-    const done    = Object.values(prog).filter(p => p.completed).length;
-    const avail   = LESSONS.filter(l => l.available).length;
+    const raw   = localStorage.getItem(`progress_${student.id}`);
+    const prog  = raw ? JSON.parse(raw) : {};
+    const meta  = JSON.parse(localStorage.getItem(`meta_${student.id}`) || '{}');
+    const plays = Object.values(prog).reduce((s, p) => s + (p.playCount || 0), 0);
+    const done  = Object.values(prog).filter(p => p.completed).length;
+    const avg   = calcAvgBestScore(prog);
+    const avgLabel = avg != null ? `平均 ${avg}点` : '未受験';
+    const avgCls   = avg == null ? '' : avg >= 70 ? 'avg-clear' : 'avg-try';
     if (plays > 0) activeCount++;
 
     return `
-      <div class="admin-row">
-        <div class="admin-name">${student.name}</div>
-        <div class="admin-id">@${student.id}</div>
+      <div class="admin-row admin-row-clickable" onclick="openStudentDetail('${student.id}')">
+        <div class="admin-row-top">
+          <div>
+            <span class="admin-name">${student.name}</span>
+            <span class="admin-id">@${student.id}</span>
+          </div>
+          <span class="admin-avg-badge ${avgCls}">${avgLabel}</span>
+        </div>
         <div class="admin-stats">
           <span class="admin-stat">完了 ${done}/${avail}</span>
           <span class="admin-stat">再生 ${plays}回</span>
+          <span class="admin-stat">🔥 ${meta.streak || 0}日</span>
         </div>
+        <div class="admin-chevron">›</div>
       </div>`;
   });
 
   $('admin-active-students').textContent = activeCount;
   $('admin-student-list').innerHTML = rows.join('');
+}
+
+// =====================================================
+// 生徒詳細ポップアップ（管理画面）
+// =====================================================
+function openStudentDetail(studentId) {
+  const student = MOCK_USERS.find(u => u.id === studentId);
+  if (!student) return;
+
+  const raw     = localStorage.getItem(`progress_${studentId}`);
+  const prog    = raw ? JSON.parse(raw) : {};
+  const meta    = JSON.parse(localStorage.getItem(`meta_${studentId}`) || '{}');
+  const avail   = LESSONS.filter(l => l.available);
+  const done    = avail.filter(l => prog[l.id]?.completed).length;
+  const overall = avail.length > 0 ? Math.round((done / avail.length) * 100) : 0;
+
+  $('detail-name').textContent    = student.name;
+  $('detail-id').textContent      = `@${student.id}`;
+  $('detail-streak').textContent  = meta.streak || 0;
+  $('detail-words').textContent   = (meta.totalWordsRead || 0).toLocaleString();
+  $('detail-overall').textContent = `${overall}%`;
+
+  // レッスン別最高点数
+  $('detail-lesson-scores').innerHTML = avail.map(l => {
+    const p = prog[l.id] || {};
+    const score   = p.bestScore != null ? `${p.bestScore}点` : '未受験';
+    const scoreCls = p.bestScore == null ? 'score-none'
+                   : p.bestScore >= 70   ? 'score-clear'
+                   : 'score-try';
+    return `
+      <div class="detail-lesson-row">
+        <span class="detail-lesson-emoji">${l.emoji}</span>
+        <div class="detail-lesson-info">
+          <span class="detail-lesson-title">${l.title}</span>
+          <span class="detail-lesson-sub">${l.level} · 再生 ${p.playCount || 0}回</span>
+        </div>
+        <span class="detail-lesson-score ${scoreCls}">${score}</span>
+      </div>`;
+  }).join('');
+
+  $('modal-student-detail').style.display = 'flex';
+}
+
+function closeStudentDetail() {
+  $('modal-student-detail').style.display = 'none';
+}
+
+function handleStudentModalBg(e) {
+  if (e.target === $('modal-student-detail')) closeStudentDetail();
 }
 
 // =====================================================
@@ -644,12 +707,19 @@ function onPlayerEnd() {
 
   // Increment play count
   PLAYER.playCount++;
-  const lid = APP.currentLesson.id;
+  const lid        = APP.currentLesson.id;
+  const wordCount  = getLessonWordCount(APP.currentLesson);
   if (!APP.progress[lid]) APP.progress[lid] = { playCount: 0, completed: false };
-  APP.progress[lid].playCount = PLAYER.playCount;
-  APP.progress[lid].completed = true;
-  APP.progress[lid].lastAt    = new Date().toISOString();
+  APP.progress[lid].playCount  = PLAYER.playCount;
+  APP.progress[lid].completed  = true;
+  APP.progress[lid].lastAt     = new Date().toISOString();
+  APP.progress[lid].wordsRead  = (APP.progress[lid].wordsRead || 0) + wordCount;
   saveProgress();
+
+  // メタ更新（連続学習日数・総読み上げ語数）
+  APP.meta.totalWordsRead = (APP.meta.totalWordsRead || 0) + wordCount;
+  updateStreak();
+  saveMeta();
 
   $('player-play-count').textContent = `再生回数: ${PLAYER.playCount}回`;
   $('player-tip').textContent = '🎉 完了！';
@@ -808,6 +878,16 @@ function skipPronCheck() {
 }
 
 function proceedAfterPron() {
+  // 発音チェックの最高点を保存
+  if (PRON.lastScore !== null && APP.currentLesson) {
+    const lid = APP.currentLesson.id;
+    if (!APP.progress[lid]) APP.progress[lid] = { playCount: 0, completed: false };
+    const prev = APP.progress[lid].bestScore ?? -1;
+    if (PRON.lastScore > prev) {
+      APP.progress[lid].bestScore = PRON.lastScore;
+      saveProgress();
+    }
+  }
   closePronModal();
   showComplete();
 }
@@ -844,6 +924,68 @@ function loadProgress() {
   APP.progress = raw ? JSON.parse(raw) : {};
 }
 
+function saveMeta() {
+  if (!APP.user) return;
+  localStorage.setItem(`meta_${APP.user.id}`, JSON.stringify(APP.meta));
+}
+
+function loadMeta() {
+  if (!APP.user) return;
+  const raw = localStorage.getItem(`meta_${APP.user.id}`);
+  APP.meta = raw ? JSON.parse(raw) : { streak: 0, lastStudyDate: '', totalWordsRead: 0 };
+}
+
+// 連続学習日数の更新
+function updateStreak() {
+  const today     = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  if (APP.meta.lastStudyDate === today) return; // 今日は既にカウント済み
+  APP.meta.streak = APP.meta.lastStudyDate === yesterday
+    ? (APP.meta.streak || 0) + 1
+    : 1;
+  APP.meta.lastStudyDate = today;
+  saveMeta();
+}
+
+// レッスンの語数を返す
+function getLessonWordCount(lesson) {
+  return lesson.text.split(/\s+/).filter(Boolean).length;
+}
+
+// 管理画面用：デモ用モックデータを初期投入（未設定の生徒のみ）
+function seedMockStudentData() {
+  const TODAY     = new Date().toISOString().split('T')[0];
+  const YESTERDAY = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const seeds = {
+    tanaka: {
+      progress: { 1: { playCount: 3, completed: true, lastAt: TODAY,      bestScore: 85, wordsRead: 171 },
+                  2: { playCount: 2, completed: true, lastAt: YESTERDAY,  bestScore: 62, wordsRead: 94  } },
+      meta:     { streak: 5, lastStudyDate: TODAY,      totalWordsRead: 265 },
+    },
+    sato: {
+      progress: { 1: { playCount: 1, completed: true, lastAt: YESTERDAY,  bestScore: 72, wordsRead: 57  } },
+      meta:     { streak: 2, lastStudyDate: YESTERDAY,  totalWordsRead: 57  },
+    },
+    yamada: {
+      progress: {},
+      meta:     { streak: 0, lastStudyDate: '', totalWordsRead: 0 },
+    },
+  };
+  Object.entries(seeds).forEach(([id, data]) => {
+    if (!localStorage.getItem(`progress_${id}`))
+      localStorage.setItem(`progress_${id}`, JSON.stringify(data.progress));
+    if (!localStorage.getItem(`meta_${id}`))
+      localStorage.setItem(`meta_${id}`, JSON.stringify(data.meta));
+  });
+}
+
+// 生徒の平均最高点を計算
+function calcAvgBestScore(progress) {
+  const scores = Object.values(progress).filter(p => p.bestScore != null).map(p => p.bestScore);
+  if (scores.length === 0) return null;
+  return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+}
+
 // =====================================================
 // STARTUP
 // =====================================================
@@ -854,6 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       APP.user = JSON.parse(saved);
       loadProgress();
+      loadMeta();
       showHome();
     } catch {
       sessionStorage.removeItem('currentUser');
@@ -862,6 +1005,9 @@ document.addEventListener('DOMContentLoaded', () => {
   } else {
     showScreen('screen-welcome');
   }
+
+  // 管理画面デモ用のモックデータを初期投入
+  seedMockStudentData();
 
   // Keyboard shortcuts for login
   $('login-id').addEventListener('keydown', e => { if (e.key === 'Enter') $('login-pw').focus(); });

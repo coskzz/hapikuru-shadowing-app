@@ -78,7 +78,7 @@
     <!-- Tab Navigation -->
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="lessons" onclick="showTab('lessons')">レッスン</button>
-      <button class="tab-btn" data-tab="progress" onclick="showTab('progress')">進捗</button>
+      <button class="tab-btn" data-tab="progress" onclick="showTab('progress')">学習管理</button>
       <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">プロフィール</button>
       <button id="tab-btn-admin" class="tab-btn" data-tab="admin" onclick="showTab('admin')" style="display:none;">管理</button>
     </nav>
@@ -95,34 +95,48 @@
         <div id="lessons-grid" class="lessons-grid"></div>
       </div>
 
-      <!-- Progress Tab -->
+      <!-- 学習管理 Tab -->
       <div id="tab-progress" class="tab-content" style="display:none;">
         <div class="tab-section-title">
-          <h2>学習の進捗</h2>
+          <h2>学習管理</h2>
         </div>
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon">✅</div>
-            <div class="stat-value" id="stat-completed">0 / 0</div>
-            <div class="stat-label">完了レッスン</div>
+
+        <!-- 3-column key stats -->
+        <div class="mgmt-stats-grid">
+          <div class="mgmt-stat-card">
+            <div class="mgmt-stat-icon">🔥</div>
+            <div class="mgmt-stat-num" id="stat-streak">0</div>
+            <div class="mgmt-stat-label">連続学習日数</div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon">▶</div>
-            <div class="stat-value" id="stat-plays">0 回</div>
-            <div class="stat-label">総再生回数</div>
+          <div class="mgmt-stat-card">
+            <div class="mgmt-stat-icon">📖</div>
+            <div class="mgmt-stat-num" id="stat-words">0</div>
+            <div class="mgmt-stat-label">読み上げた語数</div>
+          </div>
+          <div class="mgmt-stat-card">
+            <div class="mgmt-stat-icon">📊</div>
+            <div class="mgmt-stat-num" id="stat-overall">—</div>
+            <div class="mgmt-stat-label">全体の進捗</div>
+            <div class="mgmt-stat-note" id="stat-overall-note">全原稿入力後に更新</div>
           </div>
         </div>
 
-        <div class="section-card">
-          <h3 class="section-card-title">練習したレッスン</h3>
-          <div id="recent-lessons" class="recent-list">
-            <p class="no-data">まだ練習したレッスンはありません</p>
+        <!-- Sub stats row -->
+        <div class="sub-stats-row">
+          <div class="sub-stat">
+            <span class="sub-stat-label">完了レッスン</span>
+            <span class="sub-stat-val" id="stat-completed">0 / 0</span>
+          </div>
+          <div class="sub-stat">
+            <span class="sub-stat-label">総再生回数</span>
+            <span class="sub-stat-val" id="stat-plays">0 回</span>
           </div>
         </div>
 
+        <!-- Lesson scores -->
         <div class="section-card">
-          <h3 class="section-card-title">レッスン別進捗</h3>
-          <div id="lesson-progress-list" class="lesson-progress-list"></div>
+          <h3 class="section-card-title">レッスン別成績</h3>
+          <div id="lesson-scores-list" class="lesson-scores-list"></div>
         </div>
       </div>
 
@@ -318,6 +332,45 @@
         <button class="btn-outline btn-sm" onclick="skipPronCheck()">スキップ</button>
         <button class="btn-primary btn-sm" id="btn-pron-next" onclick="proceedAfterPron()" style="display:none;">次へ →</button>
       </div>
+    </div>
+  </div>
+
+
+  <!-- ===================================================
+       MODAL: 生徒詳細（管理画面用）
+  =================================================== -->
+  <div id="modal-student-detail" class="modal-overlay" style="display:none;" onclick="handleStudentModalBg(event)">
+    <div class="modal-card student-detail-card" onclick="event.stopPropagation()">
+      <div class="student-detail-header">
+        <div>
+          <div class="student-detail-name" id="detail-name"></div>
+          <div class="student-detail-id" id="detail-id"></div>
+        </div>
+        <button class="btn-modal-close" onclick="closeStudentDetail()">✕</button>
+      </div>
+
+      <!-- Key stats -->
+      <div class="detail-stats-row">
+        <div class="detail-stat">
+          <span class="detail-stat-icon">🔥</span>
+          <span class="detail-stat-num" id="detail-streak">0</span>
+          <span class="detail-stat-label">連続日数</span>
+        </div>
+        <div class="detail-stat">
+          <span class="detail-stat-icon">📖</span>
+          <span class="detail-stat-num" id="detail-words">0</span>
+          <span class="detail-stat-label">読み上げ語数</span>
+        </div>
+        <div class="detail-stat">
+          <span class="detail-stat-icon">📊</span>
+          <span class="detail-stat-num" id="detail-overall">—</span>
+          <span class="detail-stat-label">全体進捗</span>
+        </div>
+      </div>
+
+      <!-- Per-lesson best scores -->
+      <div class="detail-scores-title">レッスン別最高点数</div>
+      <div id="detail-lesson-scores" class="detail-lesson-scores"></div>
     </div>
   </div>
 
