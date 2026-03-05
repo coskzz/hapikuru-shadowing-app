@@ -743,17 +743,11 @@ function goBackFromPlayer() {
 // 発音チェック (Pronunciation Check)
 // =====================================================
 
-// レッスンテキストから最初の1文を抽出
-function extractFirstSentence(text) {
-  const m = text.match(/[^.!?]+[.!?]/);
-  return m ? m[0].trim() : text.split(' ').slice(0, 12).join(' ');
-}
-
 function openPronCheck() {
   const lesson = APP.currentLesson;
   if (!lesson) { showComplete(); return; }
 
-  PRON.targetPhrase = extractFirstSentence(lesson.text);
+  PRON.targetPhrase = lesson.text.trim();
   PRON.lastScore    = null;
   PRON.isRecording  = false;
 
