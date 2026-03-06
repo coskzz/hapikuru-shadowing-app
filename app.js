@@ -7,7 +7,7 @@ const APP = {
   user: null,
   currentLesson: null,
   progress: {},   // { lessonId: { playCount, completed, lastAt, bestScore, wordsRead } }
-  meta: { streak: 0, lastStudyDate: '', totalWordsRead: 0 },
+  meta: { streak: 0, maxStreak: 0, lastStudyDate: '', totalWordsRead: 0, studyLog: {} },
 };
 
 const PLAYER = {
@@ -117,7 +117,7 @@ function signup() {
 function logout() {
   APP.user = null;
   APP.progress = {};
-  APP.meta = { streak: 0, lastStudyDate: '', totalWordsRead: 0 };
+  APP.meta = { streak: 0, maxStreak: 0, lastStudyDate: '', totalWordsRead: 0, studyLog: {} };
   sessionStorage.removeItem('currentUser');
   stopAllAudio();
   $('login-id').value = '';
@@ -197,14 +197,61 @@ function renderLessons() {
   }).join('');
 }
 
+// ---- Stamp Card ----
+function renderStampCard(meta, containerId) {
+  const studyLog  = meta.studyLog  || {};
+  const streak    = meta.streak    || 0;
+  const maxStreak = meta.maxStreak || streak;
+  const dayNames  = ['日', '月', '火', '水', '木', '金', '土'];
+  const today     = new Date();
+
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+
+  const stampsHTML = days.map((d, idx) => {
+    const dateStr  = d.toISOString().split('T')[0];
+    const isToday  = idx === 6;
+    const studied  = !!studyLog[dateStr];
+    const words    = studied ? studyLog[dateStr].wordsRead : null;
+    const dayLabel = isToday ? '今日' : dayNames[d.getDay()];
+    const dateLabel = `${d.getMonth() + 1}/${d.getDate()}`;
+    return `
+      <div class="stamp-day">
+        <div class="stamp-day-name${isToday ? ' stamp-today' : ''}">${dayLabel}</div>
+        <div class="stamp-day-date">${dateLabel}</div>
+        <div class="stamp-circle${studied ? ' stamp-done' : ''}">
+          ${studied ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13L9 17L19 7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+        </div>
+        <div class="stamp-words">${words != null ? words : ''}</div>
+      </div>`;
+  }).join('');
+
+  $(containerId).innerHTML = `
+    <div class="streak-card">
+      <div class="streak-card-top">
+        <div>
+          <div class="streak-card-title">🔥 連続学習日数</div>
+          <div class="streak-card-sub">最高記録: ${maxStreak}日</div>
+        </div>
+        <div class="streak-count">${streak}<span class="streak-unit">日</span></div>
+      </div>
+      <div class="stamp-row">${stampsHTML}</div>
+    </div>`;
+}
+
 // ---- Progress Tab ----
 function renderProgress() {
   const available  = LESSONS.filter(l => l.available);
   const completed  = available.filter(l => APP.progress[l.id]?.completed).length;
   const totalPlays = Object.values(APP.progress).reduce((s, p) => s + (p.playCount || 0), 0);
 
-  // ── 3大指標 ──
-  $('stat-streak').textContent  = APP.meta.streak || 0;
+  // ── スタンプカード ──
+  renderStampCard(APP.meta, 'stamp-card-container');
+
   $('stat-words').textContent   = (APP.meta.totalWordsRead || 0).toLocaleString();
 
   // 全体進捗（モック：完了 / 全数）
@@ -716,7 +763,7 @@ function onPlayerEnd() {
 
   // メタ更新（連続学習日数・総読み上げ語数）
   APP.meta.totalWordsRead = (APP.meta.totalWordsRead || 0) + wordCount;
-  updateStreak();
+  updateStreak(wordCount);
   saveMeta();
 
   $('player-play-count').textContent = `再生回数: ${PLAYER.playCount}回`;
@@ -931,14 +978,14 @@ function onPronSessionEnd() {
 }
 
 function showPronScreenScore(score, transcript) {
-  const isClear = score >= 70;
+  const isClear = score >= 85;
   $('pron-score-num').textContent   = score;
   $('pron-score-circle').className  = `score-circle${isClear ? ' clear' : ''}`;
   $('pron-score-label').textContent = isClear ? '🎉 クリア！ Great job!' : '😊 もう少し！ Try again!';
   $('pron-score-transcript').textContent = transcript ? `認識結果: "${transcript}"` : '（音声が認識されませんでした）';
   $('pron-score-area').style.display   = 'flex';
   $('pron-action-row').style.display   = 'flex';
-  $('pron-tip').textContent            = isClear ? '✅ 70点以上でクリア！' : 'もう一度挑戦するか完了してください';
+  $('pron-tip').textContent            = isClear ? '✅ 85点以上でクリア！' : '前置詞・冠詞も含め全単語を発音してみよう';
 }
 
 function replayPron() {
@@ -962,13 +1009,22 @@ function proceedFromPron() {
   showComplete();
 }
 
-// 単語一致率でスコア計算（0〜100）
+// 発音チェックスコア計算（0〜100）
+// 全単語を順序通りに発音できているかを評価。
+// 前置詞・冠詞などの機能語も含め、順番に一致する単語の割合を点数とする。
+// 飛ばした単語・ぼかした単語は認識されないため自動的に減点となる。
 function calcSimilarity(target, spoken) {
-  const clean = s => s.toLowerCase().replace(/[^a-z\s]/g, '').trim().split(/\s+/).filter(Boolean);
+  const clean = s => s.toLowerCase().replace(/[^a-z'\s]/g, '').trim().split(/\s+/).filter(Boolean);
   const tw = clean(target);
   const sw = clean(spoken);
   if (tw.length === 0) return 0;
-  const matched = tw.filter(w => sw.includes(w)).length;
+  if (sw.length === 0) return 0;
+  // 順序マッチング: target の各単語が spoken に順番に現れるか検査
+  let si = 0, matched = 0;
+  for (const word of tw) {
+    while (si < sw.length && sw[si] !== word) si++;
+    if (si < sw.length) { matched++; si++; }
+  }
   return Math.round((matched / tw.length) * 100);
 }
 
@@ -1012,19 +1068,27 @@ function saveMeta() {
 function loadMeta() {
   if (!APP.user) return;
   const raw = localStorage.getItem(`meta_${APP.user.id}`);
-  APP.meta = raw ? JSON.parse(raw) : { streak: 0, lastStudyDate: '', totalWordsRead: 0 };
+  const saved = raw ? JSON.parse(raw) : {};
+  APP.meta = {
+    streak: 0, maxStreak: 0, lastStudyDate: '', totalWordsRead: 0, studyLog: {},
+    ...saved,
+  };
 }
 
-// 連続学習日数の更新
-function updateStreak() {
+// 連続学習日数の更新（wordsを渡すと当日の語数も記録）
+function updateStreak(words = 0) {
   const today     = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-  if (APP.meta.lastStudyDate === today) return; // 今日は既にカウント済み
+  if (!APP.meta.studyLog) APP.meta.studyLog = {};
+  // 当日の語数を累積記録
+  if (!APP.meta.studyLog[today]) APP.meta.studyLog[today] = { wordsRead: 0 };
+  APP.meta.studyLog[today].wordsRead += words;
+  if (APP.meta.lastStudyDate === today) return; // ストリークは1日1回
   APP.meta.streak = APP.meta.lastStudyDate === yesterday
     ? (APP.meta.streak || 0) + 1
     : 1;
+  APP.meta.maxStreak = Math.max(APP.meta.streak, APP.meta.maxStreak || 0);
   APP.meta.lastStudyDate = today;
-  saveMeta();
 }
 
 // レッスンの語数を返す
@@ -1036,19 +1100,25 @@ function getLessonWordCount(lesson) {
 function seedMockStudentData() {
   const TODAY     = new Date().toISOString().split('T')[0];
   const YESTERDAY = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const D2 = new Date(Date.now() - 2*86400000).toISOString().split('T')[0];
+  const D3 = new Date(Date.now() - 3*86400000).toISOString().split('T')[0];
+  const D5 = new Date(Date.now() - 5*86400000).toISOString().split('T')[0];
   const seeds = {
     tanaka: {
       progress: { 1: { playCount: 3, completed: true, lastAt: TODAY,      bestScore: 85, wordsRead: 171 },
                   2: { playCount: 2, completed: true, lastAt: YESTERDAY,  bestScore: 62, wordsRead: 94  } },
-      meta:     { streak: 5, lastStudyDate: TODAY,      totalWordsRead: 265 },
+      meta:     { streak: 5, maxStreak: 7, lastStudyDate: TODAY, totalWordsRead: 265,
+                  studyLog: { [D5]: { wordsRead: 42 }, [D3]: { wordsRead: 57 }, [D2]: { wordsRead: 80 },
+                              [YESTERDAY]: { wordsRead: 86 }, [TODAY]: { wordsRead: 94 } } },
     },
     sato: {
       progress: { 1: { playCount: 1, completed: true, lastAt: YESTERDAY,  bestScore: 72, wordsRead: 57  } },
-      meta:     { streak: 2, lastStudyDate: YESTERDAY,  totalWordsRead: 57  },
+      meta:     { streak: 2, maxStreak: 3, lastStudyDate: YESTERDAY, totalWordsRead: 57,
+                  studyLog: { [D2]: { wordsRead: 57 }, [YESTERDAY]: { wordsRead: 57 } } },
     },
     yamada: {
       progress: {},
-      meta:     { streak: 0, lastStudyDate: '', totalWordsRead: 0 },
+      meta:     { streak: 0, maxStreak: 0, lastStudyDate: '', totalWordsRead: 0, studyLog: {} },
     },
   };
   Object.entries(seeds).forEach(([id, data]) => {
