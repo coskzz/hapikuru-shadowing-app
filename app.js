@@ -193,6 +193,7 @@ function renderLessons() {
           }
         </div>
         ${!locked ? '<div class="lesson-arrow">▶</div>' : ''}
+        ${!locked ? `<button class="btn-report-icon btn-report-lesson" onclick="event.stopPropagation();openReportModal('${lesson.title}')" title="このレッスンを報告">🚩</button>` : ''}
       </div>`;
   }).join('');
 }
@@ -452,6 +453,10 @@ function openLesson(lessonId) {
 
   // Sync mode buttons
   applyMode();
+
+  // Set lesson name for report button
+  const reportBtn = $('player-report-btn');
+  if (reportBtn) reportBtn.onclick = () => openReportModal(lesson.title);
 
   showScreen('screen-player');
 }
@@ -802,7 +807,7 @@ function openPronScreen() {
   PRON.speed        = PLAYER.speed;  // inherit current speed
   PRON.transcript   = '';
   if (PRON.recognition) { try { PRON.recognition.stop(); } catch {} PRON.recognition = null; }
-  if (PRON.fallbackTimer) { clearInterval(PRON.fallbackTimer); PRON.fallbackTimer = null; }
+  if (PRON.fallbackTimer) { clearTimeout(PRON.fallbackTimer); PRON.fallbackTimer = null; }
 
   // Setup UI
   $('pron-lesson-title').textContent = `${lesson.emoji} ${lesson.titleJa}`;
@@ -877,32 +882,46 @@ function pronRevealAll() {
   });
 }
 
+// 音節数を概算（タイミング計算用）
+function countSyllables(word) {
+  const w = word.toLowerCase().replace(/[^a-z]/g, '');
+  if (w.length === 0) return 1;
+  const m = w.match(/[aeiouy]+/g);
+  let n = m ? m.length : 1;
+  if (w.length > 2 && w.endsWith('e') && !/[aeiouy]e$/.test(w)) n = Math.max(1, n - 1);
+  return Math.max(1, n);
+}
+
 // ---- Session Start / Stop ----
 function startPronSession() {
-  if (PRON.isRunning) return;
+  // トグル: 実行中なら途中停止して採点
+  if (PRON.isRunning) {
+    stopPronSessionAndScore();
+    return;
+  }
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const hasSpeechAPI = !!SpeechRecognition;
 
-  PRON.isRunning       = true;
+  PRON.isRunning        = true;
   PRON.currentWordIndex = 0;
-  PRON.transcript      = '';
+  PRON.transcript       = '';
 
   $('pron-start-btn').classList.add('playing');
-  $('pron-icon-play').style.display  = 'none';
-  $('pron-icon-pause').style.display = 'block';
+  $('pron-icon-play').style.display   = 'none';
+  $('pron-icon-pause').style.display  = 'block';
   $('pron-score-area').style.display  = 'none';
   $('pron-action-row').style.display  = 'none';
-  $('pron-tip').textContent           = '🔴 録音中 — テキストに合わせて読んでください';
+  $('pron-tip').textContent           = '🔴 録音中 — テキストに合わせて読んでください（■で停止→採点）';
   $('pron-rec-status').textContent    = hasSpeechAPI ? '🎤 録音中…' : '⚠️ 音声認識非対応（スコアは0点になります）';
 
-  // Start SpeechRecognition (continuous, collects all speech)
+  // Start SpeechRecognition (continuous)
   if (hasSpeechAPI) {
     const recognition = new SpeechRecognition();
-    recognition.lang             = 'en-US';
-    recognition.continuous       = true;
-    recognition.interimResults   = false;
-    recognition.maxAlternatives  = 1;
+    recognition.lang           = 'en-US';
+    recognition.continuous     = true;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
     PRON.recognition = recognition;
     PRON.isRecording = true;
 
@@ -921,26 +940,50 @@ function startPronSession() {
     try { recognition.start(); } catch {}
   }
 
-  // Karaoke timer
-  const msPerWord = Math.round((60 / (130 * PRON.speed)) * 1000 * 0.88);
-  let idx = 0;
-  PRON.fallbackTimer = setInterval(() => {
-    if (!PRON.isRunning) { clearInterval(PRON.fallbackTimer); return; }
+  // 音節数ベースの setTimeout 連鎖タイマー（自然なタイミング）
+  // ~130WPM × 平均1.5音節 = ~195音節/分 → 1音節あたり ~308ms
+  const msPerSyllable = (60000 / (195 * PRON.speed)) * 0.88;
+
+  function scheduleNext(idx) {
+    if (!PRON.isRunning) return;
     if (idx >= PRON.words.length) {
-      clearInterval(PRON.fallbackTimer);
-      PRON.fallbackTimer = null;
       onPronSessionEnd();
       return;
     }
-    pronHighlightWord(idx++);
-  }, msPerWord);
+    pronHighlightWord(idx);
+    const syllables = countSyllables(PRON.words[idx].word);
+    const delay     = Math.max(80, syllables * msPerSyllable);
+    PRON.fallbackTimer = setTimeout(() => scheduleNext(idx + 1), delay);
+  }
+  scheduleNext(0);
 }
 
 function stopPronSession() {
   PRON.isRunning = false;
-  if (PRON.fallbackTimer) { clearInterval(PRON.fallbackTimer); PRON.fallbackTimer = null; }
+  if (PRON.fallbackTimer) { clearTimeout(PRON.fallbackTimer); PRON.fallbackTimer = null; }
   if (PRON.recognition)   { try { PRON.recognition.stop(); } catch {} PRON.recognition = null; }
   PRON.isRecording = false;
+}
+
+// 途中停止→採点
+function stopPronSessionAndScore() {
+  stopPronSession();
+  pronRevealAll();
+  $('pron-start-btn').classList.remove('playing');
+  $('pron-icon-play').style.display  = 'block';
+  $('pron-icon-pause').style.display = 'none';
+  $('pron-rec-status').textContent   = '';
+  setTimeout(() => {
+    const score = calcSimilarity(APP.currentLesson?.text || '', PRON.transcript);
+    PRON.lastScore = score;
+    showPronScreenScore(score, PRON.transcript.trim());
+    if (APP.currentLesson) {
+      const lid = APP.currentLesson.id;
+      if (!APP.progress[lid]) APP.progress[lid] = { playCount: 0, completed: false };
+      const prev = APP.progress[lid].bestScore ?? -1;
+      if (score > prev) { APP.progress[lid].bestScore = score; saveProgress(); }
+    }
+  }, 400);
 }
 
 function onPronSessionEnd() {
@@ -1026,6 +1069,38 @@ function calcSimilarity(target, spoken) {
     if (si < sw.length) { matched++; si++; }
   }
   return Math.round((matched / tw.length) * 100);
+}
+
+// =====================================================
+// 報告・要望 MODAL
+// =====================================================
+function openReportModal(target) {
+  const label = target || (APP.currentLesson ? APP.currentLesson.title : 'アプリ全般');
+  $('report-target-label').textContent = `対象: ${label}`;
+  $('report-category').value           = '機能・使い方の要望';
+  $('report-body').value               = '';
+  $('report-sent-msg').style.display   = 'none';
+  $('report-actions').style.display    = 'flex';
+  $('modal-report').style.display      = 'flex';
+}
+
+function closeReportModal() {
+  $('modal-report').style.display = 'none';
+}
+
+function handleReportBg(e) {
+  if (e.target === $('modal-report')) closeReportModal();
+}
+
+function submitReport() {
+  const category = $('report-category').value;
+  const body     = $('report-body').value.trim();
+  if (!body) { $('report-body').focus(); return; }
+  // Mock送信（本番ではFirestoreに保存）
+  console.log('[Report]', { category, body, target: $('report-target-label').textContent, user: APP.user?.id });
+  $('report-actions').style.display  = 'none';
+  $('report-sent-msg').style.display = 'block';
+  setTimeout(() => closeReportModal(), 1800);
 }
 
 // =====================================================

@@ -1803,6 +1803,98 @@ html, body {
 }
 
 /* =====================================================
+   報告ボタン & モーダル
+===================================================== */
+/* プレイヤーヘッダー内アイコン */
+.btn-report-icon {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+.btn-report-icon:hover { opacity: 1; }
+
+/* レッスンカード内アイコン */
+.btn-report-lesson {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  font-size: 0.85rem;
+  padding: 2px 4px;
+  opacity: 0.5;
+}
+
+/* マイページの全幅ボタン */
+.btn-report-full {
+  display: block;
+  width: calc(100% - 32px);
+  margin: 0 16px 12px;
+  height: 46px;
+  background: transparent;
+  border: 1.5px solid #f0a0b0;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #cc4466;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-report-full:hover { background: #fff0f4; }
+
+/* 報告モーダル */
+.report-card {
+  width: min(420px, 92vw);
+  gap: 14px;
+}
+
+.report-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.report-target {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--pink-bg);
+  padding: 6px 12px;
+  border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.report-select {
+  height: 44px;
+  padding: 0 12px;
+  appearance: auto;
+}
+
+.report-textarea {
+  height: 100px;
+  resize: vertical;
+  padding: 10px 12px;
+  line-height: 1.6;
+}
+
+.report-sent-msg {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #27ae60;
+  text-align: center;
+  padding: 8px 0;
+}
+
+/* レッスンカードをrelativeに */
+.lesson-card { position: relative; }
+
+/* =====================================================
    SCREEN: 発音チェック
 ===================================================== */
 .screen-pron {

@@ -79,7 +79,7 @@
     <nav class="tab-nav">
       <button class="tab-btn active" data-tab="lessons" onclick="showTab('lessons')">レッスン</button>
       <button class="tab-btn" data-tab="progress" onclick="showTab('progress')">学習管理</button>
-      <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">プロフィール</button>
+      <button class="tab-btn" data-tab="profile" onclick="showTab('profile')">マイページ</button>
       <button id="tab-btn-admin" class="tab-btn" data-tab="admin" onclick="showTab('admin')" style="display:none;">管理</button>
     </nav>
 
@@ -141,7 +141,7 @@
       <!-- Profile Tab -->
       <div id="tab-profile" class="tab-content" style="display:none;">
         <div class="tab-section-title">
-          <h2>プロフィール</h2>
+          <h2>マイページ</h2>
         </div>
         <div class="profile-card">
           <div class="profile-avatar">👤</div>
@@ -157,6 +157,11 @@
             <button class="btn-pw-toggle" id="btn-pw-toggle" onclick="toggleProfilePassword()">表示</button>
           </div>
         </div>
+
+        <!-- Report button -->
+        <button class="btn-report-full" onclick="openReportModal('アプリ全般')">
+          🚩 バグ・要望を報告する
+        </button>
 
         <div class="section-card">
           <h3 class="section-card-title">アプリについて</h3>
@@ -224,6 +229,7 @@
           <span class="player-category" id="player-category"></span>
         </div>
       </div>
+      <button class="btn-report-icon" id="player-report-btn" onclick="openReportModal()" title="報告">🚩</button>
     </header>
 
     <!-- Karaoke Area -->
@@ -376,6 +382,38 @@
     </div>
 
   </div><!-- /screen-pron -->
+
+
+  <!-- ===================================================
+       MODAL: 報告・要望
+  =================================================== -->
+  <div id="modal-report" class="modal-overlay" style="display:none;" onclick="handleReportBg(event)">
+    <div class="modal-card report-card" onclick="event.stopPropagation()">
+      <div class="report-card-header">
+        <h3 class="modal-title">🚩 報告・要望</h3>
+        <button class="btn-modal-close" onclick="closeReportModal()">✕</button>
+      </div>
+      <div class="report-target" id="report-target-label"></div>
+      <div class="form-group">
+        <label class="form-label">カテゴリ</label>
+        <select id="report-category" class="form-input report-select">
+          <option value="単語・内容の誤り">単語・内容の誤り</option>
+          <option value="機能・使い方の要望">機能・使い方の要望</option>
+          <option value="音声・再生の問題">音声・再生の問題</option>
+          <option value="その他">その他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">詳細</label>
+        <textarea id="report-body" class="form-input report-textarea" placeholder="詳細を入力してください…"></textarea>
+      </div>
+      <div id="report-sent-msg" class="report-sent-msg" style="display:none;">✅ 送信しました！ありがとうございます。</div>
+      <div class="modal-actions" id="report-actions">
+        <button class="btn-outline btn-sm" onclick="closeReportModal()">キャンセル</button>
+        <button class="btn-primary btn-sm" onclick="submitReport()">送信</button>
+      </div>
+    </div>
+  </div>
 
 
   <!-- ===================================================
