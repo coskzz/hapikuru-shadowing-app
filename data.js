@@ -19,6 +19,7 @@ const LESSONS = [
     emoji: '🐦',
     available: true,
     text: 'There are more than 300 different kinds of hummingbirds. Many of these little birds can use their wings to make a humming sound. That is why they are called hummingbirds. The wings of a hummingbird are so little and move so fast that you cannot see them when the bird is flying.',
+    textJa: 'ハチドリには300種類以上の異なる種類がいます。これらの小さな鳥の多くは、翼を使って羽音（ハミング音）を出すことができます。それが「ハチドリ」と呼ばれる理由です。ハチドリの翼はとても小さく、動きがとても速いため、鳥が飛んでいるときには翼を見ることができません。',
   },
   {
     id: 2,
@@ -29,6 +30,7 @@ const LESSONS = [
     emoji: '🐦',
     available: true,
     text: 'Is it hard to believe that this little bird travels long distances? Not at all. One kind of hummingbird flies thousands of miles. When the fall comes, it goes south, and when the spring comes, it goes north. Its little wings carry it about a mile per minute.',
+    textJa: 'この小さな鳥が長距離を旅するとは信じられないでしょうか？まったくそんなことはありません。あるハチドリの種類は何千マイルも飛びます。秋が来ると南へ向かい、春が来ると北へ向かいます。その小さな翼は、鳥を1分間に約1マイルの速さで運んでいきます。',
   },
   {
     id: 3,

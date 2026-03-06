@@ -235,7 +235,9 @@
         <span>下のボタンで再生スタート</span>
       </div>
       <div class="karaoke-text" id="karaoke-text"></div>
+      <div class="ja-text" id="ja-text" style="display:none;"></div>
     </div>
+    <button class="btn-ja-toggle" id="btn-ja-toggle" onclick="toggleJaTranslation()">🇯🇵 日本語訳を表示</button>
 
     <!-- Player Controls Panel -->
     <div class="player-panel">
@@ -253,10 +255,10 @@
 
       <!-- Mode Toggle -->
       <div class="mode-panel">
-        <button class="mode-btn active" id="mode-btn-listen" onclick="setMode('listen')">
+        <button class="mode-btn active" id="mode-btn-listen">
           🎧 シャドーイング
         </button>
-        <button class="mode-btn" id="mode-btn-silent" onclick="setMode('silent')">
+        <button class="mode-btn" id="mode-btn-pron" onclick="openPronScreen()">
           🎤 発音チェック
         </button>
       </div>
@@ -302,38 +304,80 @@
 
 
   <!-- ===================================================
-       MODAL: 発音チェック
+       SCREEN: 発音チェック
   =================================================== -->
-  <div id="modal-pron" class="modal-overlay" style="display:none;" onclick="handleModalBgClick(event)">
-    <div class="modal-card" onclick="event.stopPropagation()">
-      <div class="modal-icon">🎤</div>
-      <h3 class="modal-title">発音チェック</h3>
-      <p class="modal-sub">以下の本文を声に出して読んでください</p>
+  <div id="screen-pron" class="screen screen-pron" style="display:none;">
 
-      <div class="pron-phrase" id="pron-phrase"></div>
-
-      <div class="pron-status" id="pron-status">🎤 ボタンを押して録音スタート</div>
-
-      <button class="btn-record" id="btn-record" onclick="toggleRecording()">
-        <span id="record-icon">🎤</span>
-        <span id="record-label">録音する</span>
+    <!-- Header -->
+    <header class="player-header">
+      <button class="btn-back" onclick="goBackFromPron()">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M13 4L7 10L13 16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
       </button>
-
-      <div class="score-display" id="score-display" style="display:none;">
-        <div class="score-circle" id="score-circle">
-          <span class="score-num" id="score-num">0</span>
-          <span class="score-unit">点</span>
-        </div>
-        <div class="score-label" id="score-label"></div>
-        <div class="score-transcript" id="score-transcript"></div>
+      <div class="player-header-info">
+        <div class="player-title">🎤 発音チェック</div>
+        <div class="player-meta"><span id="pron-lesson-title"></span></div>
       </div>
+    </header>
 
-      <div class="modal-actions">
-        <button class="btn-outline btn-sm" onclick="skipPronCheck()">スキップ</button>
-        <button class="btn-primary btn-sm" id="btn-pron-next" onclick="proceedAfterPron()" style="display:none;">次へ →</button>
-      </div>
+    <!-- Karaoke Text Area -->
+    <div class="karaoke-wrapper pron-karaoke-wrapper">
+      <div class="pron-screen-sub">テキストに合わせて声に出して読み、録音で採点します</div>
+      <div class="karaoke-text" id="pron-karaoke-text"></div>
     </div>
-  </div>
+
+    <!-- Score Display (shown after session) -->
+    <div class="pron-score-area" id="pron-score-area" style="display:none;">
+      <div class="score-circle" id="pron-score-circle">
+        <span class="score-num" id="pron-score-num">0</span>
+        <span class="score-unit">点</span>
+      </div>
+      <div class="score-label" id="pron-score-label"></div>
+      <div class="score-transcript" id="pron-score-transcript"></div>
+    </div>
+
+    <!-- Control Panel -->
+    <div class="player-panel">
+
+      <!-- Recording Status -->
+      <div class="pron-rec-status" id="pron-rec-status"></div>
+
+      <!-- Speed Controls -->
+      <div class="speed-panel">
+        <span class="speed-label">速度</span>
+        <div class="speed-buttons" id="pron-speed-buttons">
+          <button class="speed-btn" data-speed="0.5"  onclick="setPronSpeed(0.5)">0.5×</button>
+          <button class="speed-btn" data-speed="0.75" onclick="setPronSpeed(0.75)">0.75×</button>
+          <button class="speed-btn active" data-speed="1.0"  onclick="setPronSpeed(1.0)">1.0×</button>
+          <button class="speed-btn" data-speed="1.25" onclick="setPronSpeed(1.25)">1.25×</button>
+        </div>
+      </div>
+
+      <!-- Start Button -->
+      <div class="control-row" id="pron-start-row">
+        <div style="width:48px;"></div>
+        <button class="btn-ctrl btn-play-main" id="pron-start-btn" onclick="startPronSession()">
+          <svg id="pron-icon-play" width="28" height="28" viewBox="0 0 24 24" fill="none">
+            <path d="M8 5V19L19 12L8 5Z" fill="currentColor"/>
+          </svg>
+          <svg id="pron-icon-pause" width="28" height="28" viewBox="0 0 24 24" fill="none" style="display:none;">
+            <path d="M6 19H10V5H6V19ZM14 5V19H18V5H14Z" fill="currentColor"/>
+          </svg>
+        </button>
+        <div style="width:48px;"></div>
+      </div>
+
+      <!-- After-result Actions -->
+      <div class="pron-action-row" id="pron-action-row" style="display:none;">
+        <button class="btn-outline" onclick="replayPron()">もう一度</button>
+        <button class="btn-primary" onclick="proceedFromPron()">完了 →</button>
+      </div>
+
+      <p class="player-tip" id="pron-tip">速度を選んでスタートを押してください</p>
+    </div>
+
+  </div><!-- /screen-pron -->
 
 
   <!-- ===================================================
