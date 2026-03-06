@@ -1809,15 +1809,32 @@ html, body {
 .btn-report-icon {
   background: transparent;
   border: none;
-  font-size: 1.1rem;
+  font-size: 1rem;
   cursor: pointer;
   padding: 4px 6px;
   border-radius: 6px;
   opacity: 0.7;
   transition: opacity 0.2s;
   flex-shrink: 0;
+  font-family: inherit;
 }
 .btn-report-icon:hover { opacity: 1; }
+
+/* ラベル付き報告ボタン（プレイヤーヘッダー） */
+.btn-report-labeled {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  font-size: 0.85rem;
+}
+.report-flag  { font-size: 1rem; line-height: 1; }
+.report-icon-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
 
 /* レッスンカード内アイコン */
 .btn-report-lesson {

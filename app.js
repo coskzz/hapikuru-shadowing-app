@@ -772,16 +772,18 @@ function onPlayerEnd() {
   saveMeta();
 
   $('player-play-count').textContent = `再生回数: ${PLAYER.playCount}回`;
-  $('player-tip').textContent = '🎉 完了！';
-
-  // シャドーイング完了後は完了画面へ
-  setTimeout(() => showComplete(), 700);
+  $('player-tip').textContent = '✅ お疲れ様！何度でも練習できます。戻るボタンで完了できます。';
+  // 自動遷移なし — ユーザーが自分でリプレイするか戻るボタンを押す
 }
 
 function goBackFromPlayer() {
   stopAllAudio();
   PLAYER.isPlaying = false;
-  showHome();
+  if (PLAYER.playCount > 0 && APP.currentLesson) {
+    showComplete(); // 1回以上練習していれば完了サマリーを挟む
+  } else {
+    showHome();
+  }
 }
 
 // =====================================================
@@ -894,11 +896,7 @@ function countSyllables(word) {
 
 // ---- Session Start / Stop ----
 function startPronSession() {
-  // トグル: 実行中なら途中停止して採点
-  if (PRON.isRunning) {
-    stopPronSessionAndScore();
-    return;
-  }
+  if (PRON.isRunning) { stopPronSessionAndScore(); return; }
 
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   const hasSpeechAPI = !!SpeechRecognition;
@@ -908,54 +906,64 @@ function startPronSession() {
   PRON.transcript       = '';
 
   $('pron-start-btn').classList.add('playing');
-  $('pron-icon-play').style.display   = 'none';
-  $('pron-icon-pause').style.display  = 'block';
-  $('pron-score-area').style.display  = 'none';
-  $('pron-action-row').style.display  = 'none';
-  $('pron-tip').textContent           = '🔴 録音中 — テキストに合わせて読んでください（■で停止→採点）';
-  $('pron-rec-status').textContent    = hasSpeechAPI ? '🎤 録音中…' : '⚠️ 音声認識非対応（スコアは0点になります）';
+  $('pron-icon-play').style.display  = 'none';
+  $('pron-icon-pause').style.display = 'block';
+  $('pron-score-area').style.display = 'none';
+  $('pron-action-row').style.display = 'none';
 
-  // Start SpeechRecognition (continuous)
-  if (hasSpeechAPI) {
-    const recognition = new SpeechRecognition();
-    recognition.lang           = 'en-US';
-    recognition.continuous     = true;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    PRON.recognition = recognition;
-    PRON.isRecording = true;
-
-    recognition.onresult = (event) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          PRON.transcript += ' ' + event.results[i][0].transcript;
-        }
-      }
-    };
-    recognition.onerror = (e) => {
-      if (e.error !== 'aborted' && e.error !== 'no-speech') {
-        $('pron-rec-status').textContent = `⚠️ 録音エラー: ${e.error}`;
-      }
-    };
-    try { recognition.start(); } catch {}
-  }
-
-  // 音節数ベースの setTimeout 連鎖タイマー（自然なタイミング）
-  // ~130WPM × 平均1.5音節 = ~195音節/分 → 1音節あたり ~308ms
   const msPerSyllable = (60000 / (195 * PRON.speed)) * 0.88;
 
   function scheduleNext(idx) {
     if (!PRON.isRunning) return;
     if (idx >= PRON.words.length) {
-      onPronSessionEnd();
+      // 最後の単語を言い切る猶予 2.5 秒待ってから採点
+      $('pron-rec-status').textContent = '🎤 読み終えたら自動終了します…';
+      PRON.fallbackTimer = setTimeout(() => { if (PRON.isRunning) onPronSessionEnd(); }, 2500);
       return;
     }
     pronHighlightWord(idx);
-    const syllables = countSyllables(PRON.words[idx].word);
-    const delay     = Math.max(80, syllables * msPerSyllable);
+    const delay = Math.max(80, countSyllables(PRON.words[idx].word) * msPerSyllable);
     PRON.fallbackTimer = setTimeout(() => scheduleNext(idx + 1), delay);
   }
-  scheduleNext(0);
+
+  if (hasSpeechAPI) {
+    const recognition = new SpeechRecognition();
+    recognition.lang            = 'en-US';
+    recognition.continuous      = true;
+    recognition.interimResults  = false;
+    recognition.maxAlternatives = 1;
+    PRON.recognition = recognition;
+    PRON.isRecording = true;
+
+    // マイク許可が下りた後（onstart）にカラオケ開始
+    recognition.onstart = () => {
+      $('pron-tip').textContent        = '🔴 録音中 — テキストに合わせて読んでください（■で停止→採点）';
+      $('pron-rec-status').textContent = '🎤 録音中…';
+      scheduleNext(0);
+    };
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) PRON.transcript += ' ' + event.results[i][0].transcript;
+      }
+    };
+    recognition.onerror = (e) => {
+      if (e.error === 'not-allowed') {
+        // マイク拒否 → タイマーだけで続行
+        $('pron-tip').textContent        = '⚠️ マイクが許可されていません（テキストのみ進行）';
+        $('pron-rec-status').textContent = '';
+        scheduleNext(0);
+      } else if (e.error !== 'aborted' && e.error !== 'no-speech') {
+        $('pron-rec-status').textContent = `⚠️ 録音エラー: ${e.error}`;
+      }
+    };
+    $('pron-tip').textContent        = 'マイクの許可を確認中…';
+    $('pron-rec-status').textContent = '許可ダイアログが出たら「許可」を押してください';
+    try { recognition.start(); } catch { scheduleNext(0); }
+  } else {
+    $('pron-tip').textContent        = '🔴 テキストに合わせて読んでください';
+    $('pron-rec-status').textContent = '⚠️ 音声認識非対応（スコアは 0 点になります）';
+    scheduleNext(0);
+  }
 }
 
 function stopPronSession() {
@@ -1021,14 +1029,14 @@ function onPronSessionEnd() {
 }
 
 function showPronScreenScore(score, transcript) {
-  const isClear = score >= 85;
+  const isClear = score >= 75;
   $('pron-score-num').textContent   = score;
   $('pron-score-circle').className  = `score-circle${isClear ? ' clear' : ''}`;
   $('pron-score-label').textContent = isClear ? '🎉 クリア！ Great job!' : '😊 もう少し！ Try again!';
   $('pron-score-transcript').textContent = transcript ? `認識結果: "${transcript}"` : '（音声が認識されませんでした）';
   $('pron-score-area').style.display   = 'flex';
   $('pron-action-row').style.display   = 'flex';
-  $('pron-tip').textContent            = isClear ? '✅ 85点以上でクリア！' : '前置詞・冠詞も含め全単語を発音してみよう';
+  $('pron-tip').textContent            = isClear ? '✅ 75点以上でクリア！' : '前置詞・冠詞も含め全単語を声に出してみよう';
 }
 
 function replayPron() {
@@ -1049,25 +1057,32 @@ function replayPron() {
 
 function proceedFromPron() {
   stopPronSession();
-  showComplete();
+  showScreen('screen-player'); // 完了画面ではなくプレイヤーに戻る
 }
 
 // 発音チェックスコア計算（0〜100）
-// 全単語を順序通りに発音できているかを評価。
-// 前置詞・冠詞などの機能語も含め、順番に一致する単語の割合を点数とする。
-// 飛ばした単語・ぼかした単語は認識されないため自動的に減点となる。
+// 採点基準:
+//  - 各単語を「発声したか」で評価（順不同）
+//  - 4文字以上の単語: 先頭4文字が一致すればOK（"kinda"→"kind" などの縮約形を許容）
+//  - 3文字以下の機能語（a / the / of / in など）: 完全一致が必要
+//  - 合格ライン: 75点以上
+function wordMatches(target, spokenWords) {
+  if (spokenWords.includes(target)) return true;
+  if (target.length >= 4) {
+    const root = target.slice(0, 4);
+    if (spokenWords.some(w => w.length >= 3 && w.startsWith(root))) return true;
+    if (spokenWords.some(w => w.length >= 4 && target.startsWith(w.slice(0, 4)))) return true;
+  }
+  return false;
+}
+
 function calcSimilarity(target, spoken) {
   const clean = s => s.toLowerCase().replace(/[^a-z'\s]/g, '').trim().split(/\s+/).filter(Boolean);
   const tw = clean(target);
   const sw = clean(spoken);
   if (tw.length === 0) return 0;
   if (sw.length === 0) return 0;
-  // 順序マッチング: target の各単語が spoken に順番に現れるか検査
-  let si = 0, matched = 0;
-  for (const word of tw) {
-    while (si < sw.length && sw[si] !== word) si++;
-    if (si < sw.length) { matched++; si++; }
-  }
+  const matched = tw.filter(w => wordMatches(w, sw)).length;
   return Math.round((matched / tw.length) * 100);
 }
 
